@@ -1,14 +1,23 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"os"
 
 	"github.com/negasus/haproxy-spoe-go/agent"
 	"github.com/negasus/haproxy-spoe-go/logger"
+	"github.com/negasus/haproxy-spoe-go/message"
 	"github.com/negasus/haproxy-spoe-go/request"
 )
+
+var cache = make(map[string]*cacheEntry)
+
+type cacheEntry struct {
+	Request  string
+	Response string
+}
 
 func main() {
 	log.Print("Listening on 0.0.0.0:9090")
@@ -28,15 +37,93 @@ func main() {
 }
 
 func handler(req *request.Request) {
-	log.Printf("Handle request EngineID: '%s', StreamID: '%d', FrameID: '%d' with %d messages\n", req.EngineID, req.StreamID, req.FrameID, req.Messages.Len())
-
-	for _, message := range *req.Messages {
-		log.Printf("%v\n", message.Name)
-		for _, item := range message.KV.Data() {
-			log.Printf("%v\n", item.Name)
-			log.Printf("%v\n", item.Value)
+	if mes, ok := isRequestMessage(req); ok {
+		uniqueId, err := getUniqueID(mes)
+		if err != nil {
+			log.Print(err)
+			return
 		}
-		log.Printf(message.Name)
+
+		argBody, ok := mes.KV.Get("body")
+		if !ok {
+			log.Printf("var 'body' not found in message")
+			return
+		}
+
+		body, ok := argBody.([]byte)
+		if !ok {
+			log.Printf("could not assert `body` as []byte")
+			return
+		}
+
+		if _, ok := cache[uniqueId]; !ok {
+			cache[uniqueId] = &cacheEntry{}
+		}
+
+		cache[uniqueId].Request = string(body)
 	}
 
+	if mes, ok := isResponseMessage(req); ok {
+		uniqueId, err := getUniqueID(mes)
+		if err != nil {
+			log.Print(err)
+			return
+		}
+
+		for _, v := range mes.KV.Data() {
+			log.Printf("%v: %v", v.Name, v.Value)
+		}
+
+		argStatus, ok := mes.KV.Get("status")
+		if !ok {
+			log.Printf("var 'status' not found in message")
+			return
+		}
+
+		status, ok := argStatus.(int)
+		if !ok {
+			log.Printf("could not assert `status` as int")
+			return
+		}
+
+		if _, ok := cache[uniqueId]; !ok {
+			cache[uniqueId] = &cacheEntry{}
+		}
+
+		cache[uniqueId].Response = fmt.Sprintf("%d", status)
+	}
+
+	fmt.Println(cache)
+}
+
+func isRequestMessage(req *request.Request) (*message.Message, bool) {
+	mes, err := req.Messages.GetByName("request")
+	if err != nil {
+		return nil, false
+	}
+
+	return mes, true
+}
+
+func isResponseMessage(req *request.Request) (*message.Message, bool) {
+	mes, err := req.Messages.GetByName("response")
+	if err != nil {
+		return nil, false
+	}
+
+	return mes, true
+}
+
+func getUniqueID(mes *message.Message) (string, error) {
+	uniqueInterface, ok := mes.KV.Get("unique_id")
+	if !ok {
+		return "", fmt.Errorf("`unique_id` not found in message")
+	}
+
+	uniqueId, ok := uniqueInterface.(string)
+	if !ok {
+		return "", fmt.Errorf("could not assert `unique_id` as string")
+	}
+
+	return uniqueId, nil
 }
