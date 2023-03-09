@@ -70,19 +70,15 @@ func handler(req *request.Request) {
 			return
 		}
 
-		for _, v := range mes.KV.Data() {
-			log.Printf("%v: %v", v.Name, v.Value)
-		}
-
 		argStatus, ok := mes.KV.Get("status")
 		if !ok {
 			log.Printf("var 'status' not found in message")
 			return
 		}
 
-		status, ok := argStatus.(int)
+		status, ok := argStatus.(int64)
 		if !ok {
-			log.Printf("could not assert `status` as int")
+			log.Printf("could not assert `status` as int64")
 			return
 		}
 
@@ -93,7 +89,11 @@ func handler(req *request.Request) {
 		cache[uniqueId].Response = fmt.Sprintf("%d", status)
 	}
 
-	fmt.Println(cache)
+	for uniqueId, entry := range cache {
+		fmt.Println(uniqueId)
+		fmt.Println(entry.Request)
+		fmt.Println(entry.Response)
+	}
 }
 
 func isRequestMessage(req *request.Request) (*message.Message, bool) {
