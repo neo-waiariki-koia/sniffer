@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net"
@@ -60,7 +61,9 @@ func handler(req *request.Request) {
 			cache[uniqueId] = &cacheEntry{}
 		}
 
-		cache[uniqueId].Request = string(body)
+		spacedHTTPRequest := bytes.Split(body, []byte(" "))
+		path := string(spacedHTTPRequest[1])
+		cache[uniqueId].Request = path
 	}
 
 	if mes, ok := isResponseMessage(req); ok {
@@ -70,15 +73,19 @@ func handler(req *request.Request) {
 			return
 		}
 
-		argStatus, ok := mes.KV.Get("status")
+		argBody, ok := mes.KV.Get("body")
 		if !ok {
 			log.Printf("var 'status' not found in message")
+		}
+
+		body, ok := argBody.([]byte)
+		if !ok {
+			log.Printf("could not assert `body` as []byte")
 			return
 		}
 
-		status, ok := argStatus.(int64)
-		if !ok {
-			log.Printf("could not assert `status` as int64")
+		if string(body) == "" {
+			log.Printf("empty body")
 			return
 		}
 
@@ -86,7 +93,9 @@ func handler(req *request.Request) {
 			cache[uniqueId] = &cacheEntry{}
 		}
 
-		cache[uniqueId].Response = fmt.Sprintf("%d", status)
+		spacedHTTPResponse := bytes.Split(body, []byte(" "))
+		statusCode := string(spacedHTTPResponse[1])
+		cache[uniqueId].Response = statusCode
 	}
 
 	for uniqueId, entry := range cache {
