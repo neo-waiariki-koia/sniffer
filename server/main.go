@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 func main() {
@@ -25,8 +26,13 @@ func main() {
 		w.Write([]byte(`{"message":"hello world"}`))
 	})
 
-	mux.HandleFunc("/post", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("Request coming in on `/pod`")
+	mux.HandleFunc("/sleep", func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(5 * time.Minute)
+		w.Write([]byte(`{"message":"finished sleeping"}`))
+	})
+
+	mux.HandleFunc("/post_success", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("Request coming in on `/post_success`")
 		resp, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -34,6 +40,18 @@ func main() {
 		}
 		fmt.Println(string(resp))
 		w.Write([]byte(`{"message":"successful"}`))
+	})
+
+	mux.HandleFunc("/post_fail", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("Request coming in on `/post_fail`")
+		resp, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		fmt.Println(string(resp))
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"message":"failed"}`))
 	})
 
 	server := &http.Server{
